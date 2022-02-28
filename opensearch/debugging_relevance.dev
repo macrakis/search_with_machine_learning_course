@@ -94,6 +94,8 @@ GET /bbuy_queries/_search
        "Query": {
             "terms": {
               "size": 10,
+
+              
               "field": "query.keyword"
             },
             "aggs":{

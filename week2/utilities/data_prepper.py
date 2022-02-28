@@ -230,30 +230,33 @@ class DataPrepper:
     def __log_ltr_query_features(self, query_id, key, query_doc_ids, click_prior_query, no_results, terms_field="_id"):
 
         log_query = lu.create_feature_log_query(key, query_doc_ids, click_prior_query, self.featureset_name,
-                                                self.ltr_store_name,
-                                                size=len(query_doc_ids), terms_field=terms_field)
-        # IMPLEMENT_START --
-        print("IMPLEMENT ME: __log_ltr_query_features: Extract log features out of the LTR:EXT response and place in a data frame")
-        # Loop over the hits structure returned by running `log_query` and then extract out the features from the response per query_id and doc id.  Also capture and return all query/doc pairs that didn't return features
-        # Your structure should look like the data frame below
-        feature_results = {}
-        feature_results["doc_id"] = []  # capture the doc id so we can join later
-        feature_results["query_id"] = []  # ^^^
-        feature_results["sku"] = []
-        feature_results["salePrice"] = []
-        feature_results["name_match"] = []
-        rng = np.random.default_rng(12345)
-        for doc_id in query_doc_ids:
-            feature_results["doc_id"].append(doc_id)  # capture the doc id so we can join later
-            feature_results["query_id"].append(query_id)
-            feature_results["sku"].append(doc_id)  # ^^^
-            feature_results["salePrice"].append(rng.random())
-            feature_results["name_match"].append(rng.random())
-        frame = pd.DataFrame(feature_results)
-        return frame.astype({'doc_id': 'int64', 'query_id': 'int64', 'sku': 'int64'})
-        # IMPLEMENT_END
+                            self.ltr_store_name,
+                            size=len(query_doc_ids), terms_field=terms_field)
 
-    # Can try out normalizing data, but for XGb, you really don't have to since it is just finding splits
+        # New code
+        response = self.opensearch.search(log_query,self.index_name)
+
+        def log_entries(hit):
+            return hit['fields']['_ltrlog'][0]['log_entry']
+
+        hits = response['hits']['hits']
+        feature_names = [ i['name'] for i in log_entries(hits[0]) ]
+        try:
+            table = [  [ hit['_id'],            # doc_id
+                         query_id.tolist()[0],  # query_id -- surely there's a better way?
+                         hit['_source']['sku'][0] ] # SKU
+                      +
+                    [ i.get('value',0) for i in log_entries(hit) ] # feature values
+                     for hit in hits ]
+        except:
+            print(query_id)
+            breakpoint()
+        frame = pd.DataFrame(table, columns = ['doc_id', 'query_id', 'sku'] + feature_names)
+        return frame.astype({'doc_id': 'int64', 'query_id': 'int64', 'sku': 'int64'})
+        # End new code
+
+
+        # Can try out normalizing data, but for XGb, you really don't have to since it is just finding splits
     def normalize_data(self, ranks_features_df, feature_set, normalize_type_map):
         # we need to get some stats from OpenSearch and then use that to normalize our data
         agg_fields = []
@@ -301,5 +304,6 @@ class DataPrepper:
 
     # Determine the number of clicks for this sku given a query (represented by the click group)
     def __num_clicks(self, all_skus_for_query, test_sku):
+        breakpoint()
         print("IMPLEMENT ME: __num_clicks(): Return how many clicks the given sku received in the set of skus passed ")
         return 0

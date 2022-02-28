@@ -1,3 +1,4 @@
+
 from flask import g, current_app
 from opensearchpy import OpenSearch
 
